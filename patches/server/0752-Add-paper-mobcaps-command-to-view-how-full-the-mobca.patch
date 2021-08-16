@@ -7,10 +7,10 @@ Also has a hover text on each mob spawn category listing what entity types are i
 
 TODO: Add EntityTypeTags for MobCategorys, to allow for autofilling a /kill command on entity type clickevent
  - maybe this should be a separate patch, as it could be somewhat useful in general?
-TODO: Account for when mob caps are modified in configs
+TODO: Account for per-player spawning
 
 diff --git a/src/main/java/com/destroystokyo/paper/PaperCommand.java b/src/main/java/com/destroystokyo/paper/PaperCommand.java
-index ba8395435482fc4d6e02fc86794cdb0d35d4399c..73e391999cbcac4e4b689bf6c8f01462ff769106 100644
+index ba8395435482fc4d6e02fc86794cdb0d35d4399c..af712a42a817de0a33a2a3c672bc7586a7b8a128 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperCommand.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperCommand.java
 @@ -10,6 +10,10 @@ import com.google.common.collect.Maps;
@@ -145,7 +145,7 @@ index ba8395435482fc4d6e02fc86794cdb0d35d4399c..73e391999cbcac4e4b689bf6c8f01462
 +                    Component.text(": ", NamedTextColor.GRAY),
 +                    Component.text(count),
 +                    Component.text("/", NamedTextColor.GRAY),
-+                    Component.text(category.getMaxInstancesPerChunk())
++                    Component.text(NaturalSpawner.limitForCategory(((CraftWorld) world).getHandle(), category))
 +                );
 +            });
 +
@@ -176,3 +176,64 @@ index ba8395435482fc4d6e02fc86794cdb0d35d4399c..73e391999cbcac4e4b689bf6c8f01462
  
          int accumulatedTotal = 0;
          int accumulatedInactive = 0;
+diff --git a/src/main/java/net/minecraft/world/level/NaturalSpawner.java b/src/main/java/net/minecraft/world/level/NaturalSpawner.java
+index 88145f04989c71a686aae1b486087ecdf55e268c..a2bdba4d296ae2583c38fb30040180168e73a4be 100644
+--- a/src/main/java/net/minecraft/world/level/NaturalSpawner.java
++++ b/src/main/java/net/minecraft/world/level/NaturalSpawner.java
+@@ -144,28 +144,15 @@ public final class NaturalSpawner {
+             MobCategory enumcreaturetype = aenumcreaturetype[j];
+             // CraftBukkit start - Use per-world spawn limits
+             boolean spawnThisTick = true;
+-            int limit = enumcreaturetype.getMaxInstancesPerChunk();
++            final int limit = limitForCategory(world, enumcreaturetype); // Paper
+             switch (enumcreaturetype) {
+-                case MONSTER:
+-                    spawnThisTick = spawnMonsterThisTick;
+-                    limit = world.getWorld().getMonsterSpawnLimit();
+-                    break;
+-                case CREATURE:
+-                    spawnThisTick = spawnAnimalThisTick;
+-                    limit = world.getWorld().getAnimalSpawnLimit();
+-                    break;
+-                case WATER_CREATURE:
+-                    spawnThisTick = spawnWaterThisTick;
+-                    limit = world.getWorld().getWaterAnimalSpawnLimit();
+-                    break;
+-                case AMBIENT:
+-                    spawnThisTick = spawnAmbientThisTick;
+-                    limit = world.getWorld().getAmbientSpawnLimit();
+-                    break;
+-                case WATER_AMBIENT:
+-                    spawnThisTick = spawnWaterAmbientThisTick;
+-                    limit = world.getWorld().getWaterAmbientSpawnLimit();
+-                    break;
++                // Paper start - not mindiff so we get conflict on change
++                case MONSTER -> spawnThisTick = spawnMonsterThisTick;
++                case CREATURE -> spawnThisTick = spawnAnimalThisTick;
++                case WATER_CREATURE -> spawnThisTick = spawnWaterThisTick;
++                case AMBIENT -> spawnThisTick = spawnAmbientThisTick;
++                case WATER_AMBIENT -> spawnThisTick = spawnWaterAmbientThisTick;
++                // Paper end
+             }
+ 
+             if (!spawnThisTick || limit == 0) {
+@@ -204,6 +191,19 @@ public final class NaturalSpawner {
+         world.getProfiler().pop();
+     }
+ 
++    // Paper start
++    public static int limitForCategory(final ServerLevel world, final MobCategory enumcreaturetype) {
++        return switch (enumcreaturetype) {
++            case MONSTER -> world.getWorld().getMonsterSpawnLimit();
++            case CREATURE -> world.getWorld().getAnimalSpawnLimit();
++            case WATER_CREATURE -> world.getWorld().getWaterAnimalSpawnLimit();
++            case AMBIENT -> world.getWorld().getAmbientSpawnLimit();
++            case WATER_AMBIENT -> world.getWorld().getWaterAmbientSpawnLimit();
++            default -> enumcreaturetype.getMaxInstancesPerChunk();
++        };
++    }
++    // Paper end
++
+     // Paper start - add parameters and int ret type
+     public static void spawnCategoryForChunk(MobCategory group, ServerLevel world, LevelChunk chunk, NaturalSpawner.SpawnPredicate checker, NaturalSpawner.AfterSpawnCallback runner) {
+         spawnCategoryForChunk(group, world, chunk, checker, runner);
